@@ -23,7 +23,3 @@ Example usage is shown in setup_energyHub_LUT.m file.
 
 ## Citing energyHub-LUT
 If you use energyHub-LUT for your research, we would appreciate it if you would cite the following paper:
-
-
-## License
-energyHub-LUT is licensed under the open source MIT License.
