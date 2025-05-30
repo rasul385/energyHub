@@ -2,12 +2,14 @@
 
 A MATLAB-based optimisation framework for designing and operating energy hubs that combine renewable energy sources with Power-to-X (PtX) technologies for synthetic fuel production.
 
+![image]
+
 ## Features
 
 - Integration of multiple renewable energy sources:
   - Wind power
   - Fixed-tilt and single-axis tracking PV systems
-  - Wave energy
+  - Wave power
 - Power-to-X conversion pathways:
   - Ammonia synthesis
   - Methanation
@@ -16,7 +18,7 @@ A MATLAB-based optimisation framework for designing and operating energy hubs th
 - Energy storage systems:
   - Battery storage
   - Thermal energy storage
-  - Hydrogen storage (rock cavern and pipe storage)
+  - Hydrogen storage (rock cavern and underground pipe storage)
   - CO2 storage
   - Fuel storage systems for NH3, CH4, MeOH, and FT liquids
 - Optimisation of:
