@@ -2,29 +2,7 @@
 
 A MATLAB-based optimisation framework for designing and operating energy hubs that combine renewable energy sources with Power-to-X (PtX) technologies for synthetic fuel production.
 
-![image](energy-Hub LUT Schematic.png)
-
-## Features
-
-- Integration of multiple renewable energy sources:
-  - Wind power
-  - Fixed-tilt and single-axis tracking PV systems
-  - Wave power
-- Power-to-X conversion pathways:
-  - Ammonia synthesis
-  - Methanation
-  - Methanol synthesis
-  - Fischer-Tropsch synthesis
-- Energy storage systems:
-  - Battery storage
-  - Thermal energy storage
-  - Hydrogen storage (rock cavern and underground pipe storage)
-  - CO2 storage
-  - Fuel storage systems for NH3, CH4, MeOH, and FT liquids
-- Optimisation of:
-  - Renewable energy capacities
-  - Power-to-X conversion capacities
-  - Storage system sizing
+![image](https://github.com/rasul385/energyHub/blob/main/energy-Hub%20LUT%20Schematic.png)
 
 ## Usage
 The core of the project is the energyHub_LUT.m function. Before running the function, you need to prepare the input data:
