@@ -2,7 +2,7 @@
 
 A MATLAB-based optimisation framework for designing and operating energy hubs that combine renewable energy sources with Power-to-X (PtX) technologies for synthetic fuel production.
 
-![image]
+![image](energy-Hub LUT Schematic.png)
 
 ## Features
 
