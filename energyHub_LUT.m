@@ -37,6 +37,12 @@ pvo_prof = profiles.pvo(1:numHours); % PV fixed-tilt
 pva_prof = profiles.pva(1:numHours); % PV single-axis tracking
 wave_prof = profiles.wave(1:numHours);
 
+% Convert annual demands to hourly constant demands
+nh3_demand = ones(numHours,1) * nh3_demand/numHours;
+ch4_demand = ones(numHours,1) * ch4_demand/numHours;
+meoh_demand = ones(numHours,1) * meoh_demand/numHours;
+ft_demand = ones(numHours,1) * ft_demand/numHours;
+
 %% Extract Technology Parameters from Cost Table
 % Helper function to extract cost table values
 getCostParam = @(tech, comp) assumptionsTable.x2050(matches(assumptionsTable.Tech, tech) & matches(assumptionsTable.Comp, comp));
@@ -51,42 +57,39 @@ h2_rockCavern_EP_ratio = getCostParam('H2 Storage - lined rock cavern', 'E/P rat
 h2_pipe_EP_ratio = getCostParam('H2 Storage - underground pipe', 'E/P ratio');
 co2_storage_EP_ratio = getCostParam('CO2 Storage', 'E/P ratio');
 meoh_storage_EP_ratio = getCostParam('Methanol Storage', 'E/P ratio');
-nh3_storage_EP_ratio = getCostParam('Ammonia Storage', 'E/P ratio');
+nh3_storage_EP_ratio = round(getCostParam('Ammonia Storage', 'E/P ratio'));
+ch4_storage_EP_ratio_in = getCostParam('CH4 Storage', 'E/P ratio input');
+ch4_storage_EP_ratio_out = round(getCostParam('CH4 Storage', 'E/P ratio output'));
+tes_EP_ratio = getCostParam('Thermal Energy Storage', 'E/P ratio');
 
 % Power-to-X electricity consumption ratios [MWh_elec/MWh_product]
-el_to_wel = getCostParam('Alkaline Water Electrolyser (BCS)', 'Electricity in');
+el_to_wel = getCostParam('Alkaline Water Electrolyser', 'Electricity in');
 el_to_dac = getCostParam('Direct Air Capture', 'Electricity in');
-el_to_nh3 = getCostParam('Ammonia Synthesis', 'Electricity in');
-el_to_meoh = getCostParam('Methanol Synthesis', 'Electricity in');
+el_to_nh3 = round(getCostParam('Ammonia Synthesis', 'Electricity in'),3);
+el_to_meoh = round(getCostParam('Methanol Synthesis', 'Electricity in'),3);
 el_to_ft = getCostParam('Fischer-Tropsch', 'Electricity in');
 
 % Hydrogen consumption ratios [MWh_H2/MWh_product]
-h2_to_nh3 = getCostParam('Ammonia Synthesis', 'Hydrogen in');
-h2_to_ch4 = getCostParam('Methanation', 'Hydrogen in');
-h2_to_meoh = getCostParam('Methanol Synthesis', 'Hydrogen in');
+h2_to_nh3 = round(getCostParam('Ammonia Synthesis', 'Hydrogen in'),3);
+h2_to_ch4 = round(getCostParam('Methanation', 'Hydrogen in'),3);
+h2_to_meoh = round(getCostParam('Methanol Synthesis', 'Hydrogen in'),3);
 h2_to_ft = getCostParam('Fischer-Tropsch', 'Hydrogen in');
-h2_to_gasTurbine = getCostParam('Multi-fuel Gas Turbine', 'Hydrogen in');
-ch4_to_gasTurbine = getCostParam('Multi-fuel Gas Turbine', 'Gas in');
+h2_to_ice = getCostParam('Multi-fuel Internal Combustion Engine', 'Hydrogen in');
+ch4_to_ice = getCostParam('Multi-fuel Internal Combustion Engine', 'Gas in');
 
 % CO2 consumption ratios [t_CO2/MWh_product]
-co2_to_ch4 = getCostParam('Methanation', 'CO2 in');
-co2_to_meoh = getCostParam('Methanol Synthesis', 'CO2 in');
+co2_to_ch4 = round(getCostParam('Methanation', 'CO2 in'),3);
+co2_to_meoh = round(getCostParam('Methanol Synthesis', 'CO2 in'),3);
 co2_to_ft = getCostParam('Fischer-Tropsch', 'CO2 in');
 
 % Heat system parameters
 he_to_dac = getCostParam('Direct Air Capture', 'Heat in');
-he_from_nh3 = getCostParam('Ammonia Synthesis', 'Excess heat');
-he_from_ft = getCostParam('Fischer-Tropsch', 'Excess heat');
-he_from_wel = getCostParam('Alkaline Water Electrolyser (BCS)', 'PtHeat eff.');
+he_from_nh3 = round(getCostParam('Ammonia Synthesis', 'Excess heat'),3);
+he_from_ft = round(getCostParam('Fischer-Tropsch', 'Excess heat'),3);
+he_from_wel = getCostParam('Alkaline Water Electrolyser', 'PtHeat eff.');
 cop_ambient = getCostParam('Heat Pump', 'COP'); % Coefficient of Performance
 cop_wel = 9.99 - 0.2049*(100-75) + 0.001249*(100-75)^2; % COP for waste heat recovery
 el_to_elecHeat = getCostParam('Electric Heater', 'Electricity in');
-
-% Convert annual demands to hourly constant demands
-nh3_demand = ones(numHours,1) * nh3_demand/numHours;
-ch4_demand = ones(numHours,1) * ch4_demand/numHours;
-meoh_demand = ones(numHours,1) * meoh_demand/numHours;
-ft_demand = ones(numHours,1) * ft_demand/numHours;
 
 %% Define optimisation problem
 prob = optimproblem("Description", "energyHub-LUT");
@@ -110,11 +113,11 @@ heatPump_ambient_prod = optimvar("heatPump_ambient_prod", numHours, "LowerBound"
 % Electric heaters
 elecHeat_cap = optimvar("elecHeat_cap", "LowerBound", 0);
 elecHeat_prod = optimvar("elecHeat_prod", numHours, "LowerBound", 0);
-% Multi-fuel gas turbine
-gasTurbine_cap = optimvar("gasTurbine_cap", "LowerBound", 0);
-gasTurbine_prod = optimvar("gasTurbine_prod", numHours, "LowerBound", 0);
-gasTurbine_h2_cons = optimvar("gasTurbine_h2_cons", numHours, "LowerBound", 0);
-gasTurbine_ch4_cons = optimvar("gasTurbine_ch4_cons", numHours, "LowerBound", 0);
+% Multi-fuel Internal Combustion Engine
+ice_cap = optimvar("ice_cap", "LowerBound", 0);
+ice_prod = optimvar("ice_prod", numHours, "LowerBound", 0);
+ice_h2_cons = optimvar("ice_h2_cons", numHours, "LowerBound", 0);
+ice_ch4_cons = optimvar("ice_ch4_cons", numHours, "LowerBound", 0);
 % Electrolyser
 wel_cap = optimvar("wel_cap", "LowerBound", 0);
 wel_prod = optimvar("wel_prod", numHours, "LowerBound", 0);
@@ -188,19 +191,22 @@ ch4_storage_SOC = optimvar("ch4_storage_SOC", numHours, "LowerBound", 0);
 
 % Production + Storage Discharge >= Demand + Storage Charge
 prob.Constraints.balance_fuels = [ch4_prod; nh3_prod; meoh_prod; ft_prod] + [ch4_storage_discharge; nh3_storage_discharge; meoh_storage_discharge; ft_storage_discharge] >= ...
-     [ch4_demand+gasTurbine_ch4_cons; nh3_demand; meoh_demand; ft_demand] + [ch4_storage_charge; nh3_storage_charge; meoh_storage_charge; ft_storage_charge];
+     [ch4_demand+ice_ch4_cons; nh3_demand; meoh_demand; ft_demand] + [ch4_storage_charge; nh3_storage_charge; meoh_storage_charge; ft_storage_charge];
 
-prob.Constraints.balance_h2 = wel_prod + h2_rockCavern_discharge + h2_pipe_discharge >= nh3_prod*h2_to_nh3 + ch4_prod*h2_to_ch4 + meoh_prod*h2_to_meoh + ft_prod*h2_to_ft + gasTurbine_h2_cons + h2_rockCavern_charge + h2_pipe_charge;
+prob.Constraints.balance_h2 = wel_prod + h2_rockCavern_discharge + h2_pipe_discharge >= nh3_prod*h2_to_nh3 + ch4_prod*h2_to_ch4 + meoh_prod*h2_to_meoh + ft_prod*h2_to_ft + ice_h2_cons + h2_rockCavern_charge + h2_pipe_charge;
 
 prob.Constraints.balance_co2 = dac_prod + co2_storage_discharge >= ch4_prod*co2_to_ch4 + meoh_prod*co2_to_meoh + ft_prod*co2_to_ft + co2_storage_charge;
 
-prob.Constraints.balance_el = PVO_cap*pvo_prof + PVA_cap*pva_prof + wind_cap*wind_prof + wave_cap*wave_prof + gasTurbine_prod + battery_discharge >= ...
+prob.Constraints.balance_el = PVO_cap*pvo_prof + PVA_cap*pva_prof + wind_cap*wind_prof + wave_cap*wave_prof + ice_prod + battery_discharge >= ...
     heatPump_wel_prod/cop_wel + heatPump_ambient_prod/cop_ambient + elecHeat_prod*el_to_elecHeat + wel_prod*el_to_wel + nh3_prod*el_to_nh3 + dac_prod*el_to_dac + meoh_prod*el_to_meoh + ft_prod*el_to_ft + battery_charge;
+
+% prob.Constraints.balance_el = PVO_cap*pvo_prof + PVA_cap*pva_prof + wind_cap*wind_prof + wave_cap*wave_prof + ice_prod + battery_discharge >= ...
+%     ones(numHours,1) * 8.8*10^6/numHours + heatPump_wel_prod/cop_wel + heatPump_ambient_prod/cop_ambient + elecHeat_prod*el_to_elecHeat + wel_prod*el_to_wel + battery_charge;
 
 prob.Constraints.balance_he = heatPump_wel_prod + heatPump_ambient_prod + elecHeat_prod  + nh3_prod*he_from_nh3 + ft_prod*he_from_ft + tes_discharge >= dac_prod * he_to_dac + tes_charge;
 
-% Gas Turbine Fuel Balance
-prob.Constraints.gasTurbine_fuel = gasTurbine_prod == gasTurbine_h2_cons*h2_to_gasTurbine + gasTurbine_ch4_cons*ch4_to_gasTurbine;
+% Internal Combustion Engine Fuel Balance
+prob.Constraints.ice_fuel = ice_prod == ice_h2_cons*h2_to_ice + ice_ch4_cons*ch4_to_ice;
 
 % Limit heat pump production using excess heat from electrolyzers
 prob.Constraints.heatPump_wel_limit = heatPump_wel_prod <= wel_prod * he_from_wel;
@@ -210,6 +216,9 @@ prob.Constraints.heatPump_wel_limit = heatPump_wel_prod <= wel_prod * he_from_we
 % Define max storage charge and discharge rates based on E/P ratios
 prob.Constraints.battery_charge = battery_charge <= battery_cap/battery_EP_ratio;
 prob.Constraints.battery_discharge = battery_discharge <= battery_cap/battery_EP_ratio;
+
+prob.Constraints.tes_charge = tes_charge <= tes_cap/tes_EP_ratio;
+prob.Constraints.tes_discharge = tes_discharge <= tes_cap/tes_EP_ratio;
 
 prob.Constraints.h2_rockCavern_charge = h2_rockCavern_charge <= h2_rockCavern_cap/h2_rockCavern_EP_ratio;
 prob.Constraints.h2_rockCavern_discharge = h2_rockCavern_discharge <= h2_rockCavern_cap/h2_rockCavern_EP_ratio;
@@ -225,6 +234,9 @@ prob.Constraints.nh3_storage_discharge = nh3_storage_discharge <= nh3_storage_ca
 
 prob.Constraints.meoh_storage_charge = meoh_storage_charge <= meoh_storage_cap/meoh_storage_EP_ratio;
 prob.Constraints.meoh_storage_discharge = meoh_storage_discharge <= meoh_storage_cap/meoh_storage_EP_ratio;
+
+prob.Constraints.ch4_storage_charge = ch4_storage_charge <= ch4_storage_cap/ch4_storage_EP_ratio_in;
+prob.Constraints.ch4_storage_discharge = ch4_storage_discharge <= ch4_storage_cap/ch4_storage_EP_ratio_out;
 
 % State Of Charge (SOC) difference for all hours except the first one
 prob.Constraints.battery_SOC_diff = battery_SOC(2:numHours) == battery_SOC(1:numHours-1) + battery_charge(1:numHours-1) * charg_efficiency - battery_discharge(1:numHours-1) / discharg_efficiency;
@@ -243,17 +255,13 @@ prob.Constraints.h2_pipe_SOC_diff = h2_pipe_SOC(2:numHours) == h2_pipe_SOC(1:num
 prob.Constraints.h2_pipe_SOC_max = h2_pipe_SOC <= h2_pipe_cap;
 prob.Constraints.h2_pipe_SOC_initial = h2_pipe_SOC(1) == h2_pipe_SOC(end) + h2_pipe_charge(end) - h2_pipe_discharge(end);
 
-prob.Constraints.nh3_storage_SOC_diff = nh3_storage_SOC(2:numHours) == nh3_storage_SOC(1:numHours-1) + nh3_storage_charge(1:numHours-1) - nh3_storage_discharge(1:numHours-1);
-prob.Constraints.nh3_storage_SOC_max = nh3_storage_SOC <= nh3_storage_cap;
-prob.Constraints.nh3_storage_SOC_initial = nh3_storage_SOC(1) == nh3_storage_SOC(end) + nh3_storage_charge(end) - nh3_storage_discharge(end);
-
 prob.Constraints.co2_storage_SOC_diff = co2_storage_SOC(2:numHours) == co2_storage_SOC(1:numHours-1) + co2_storage_charge(1:numHours-1) - co2_storage_discharge(1:numHours-1);
 prob.Constraints.co2_storage_SOC_max = co2_storage_SOC <= co2_storage_cap;
 prob.Constraints.co2_storage_SOC_initial = co2_storage_SOC(1) == co2_storage_SOC(end) + co2_storage_charge(end) - co2_storage_discharge(end);
 
-prob.Constraints.ch4_storage_SOC_diff = ch4_storage_SOC(2:numHours) == ch4_storage_SOC(1:numHours-1) + ch4_storage_charge(1:numHours-1) - ch4_storage_discharge(1:numHours-1);
-prob.Constraints.ch4_storage_SOC_max = ch4_storage_SOC <= ch4_storage_cap;
-prob.Constraints.ch4_storage_SOC_initial = ch4_storage_SOC(1) == ch4_storage_SOC(end) + ch4_storage_charge(end) - ch4_storage_discharge(end);
+prob.Constraints.nh3_storage_SOC_diff = nh3_storage_SOC(2:numHours) == nh3_storage_SOC(1:numHours-1) + nh3_storage_charge(1:numHours-1) - nh3_storage_discharge(1:numHours-1);
+prob.Constraints.nh3_storage_SOC_max = nh3_storage_SOC <= nh3_storage_cap;
+prob.Constraints.nh3_storage_SOC_initial = nh3_storage_SOC(1) == nh3_storage_SOC(end) + nh3_storage_charge(end) - nh3_storage_discharge(end);
 
 prob.Constraints.meoh_storage_SOC_diff = meoh_storage_SOC(2:numHours) == meoh_storage_SOC(1:numHours-1) + meoh_storage_charge(1:numHours-1) - meoh_storage_discharge(1:numHours-1);
 prob.Constraints.meoh_storage_SOC_max = meoh_storage_SOC <= meoh_storage_cap;
@@ -263,28 +271,44 @@ prob.Constraints.ft_storage_SOC_diff = ft_storage_SOC(2:numHours) == ft_storage_
 prob.Constraints.ft_storage_SOC_max = ft_storage_SOC <= ft_storage_cap;
 prob.Constraints.ft_storage_SOC_initial = ft_storage_SOC(1) == ft_storage_SOC(end) + ft_storage_charge(end) - ft_storage_discharge(end);
 
+prob.Constraints.ch4_storage_SOC_diff = ch4_storage_SOC(2:numHours) == ch4_storage_SOC(1:numHours-1) + ch4_storage_charge(1:numHours-1) - ch4_storage_discharge(1:numHours-1);
+prob.Constraints.ch4_storage_SOC_max = ch4_storage_SOC <= ch4_storage_cap;
+prob.Constraints.ch4_storage_SOC_initial = ch4_storage_SOC(1) == ch4_storage_SOC(end) + ch4_storage_charge(end) - ch4_storage_discharge(end);
+
 %% Technology Capacity and Operation Constraints
 
 % Max production constraint
 prob.Constraints.heatPump_cap = heatPump_wel_prod + heatPump_ambient_prod <= heatPump_cap;
 prob.Constraints.elecHeat_cap = elecHeat_prod <= elecHeat_cap;
 prob.Constraints.wel_cap = wel_prod <= wel_cap;
-prob.Constraints.nh3_cap_max = nh3_prod <= nh3_cap;
+prob.Constraints.nh3_cap = nh3_prod <= nh3_cap;
 prob.Constraints.dac_cap = dac_prod <= dac_cap;
 prob.Constraints.ch4_cap = ch4_prod <= ch4_cap;
 prob.Constraints.meoh_cap = meoh_prod <= meoh_cap;
 prob.Constraints.ft_cap = ft_prod <= ft_cap;
-prob.Constraints.gasTurbine_cap = gasTurbine_prod <= gasTurbine_cap;
+prob.Constraints.ice_cap = ice_prod <= ice_cap;
 
 % Minimum load constraints for chemical processes (technical limitations)
-prob.Constraints.wel_cap_min = wel_prod   >= wel_cap * 0.2;  % 20% minimum load
-prob.Constraints.nh3_cap_min = nh3_prod   >= nh3_cap * 0.5;  % 50% minimum load
-prob.Constraints.meoh_cap_min = meoh_prod >= meoh_cap * 0.5; % 50% minimum load
-prob.Constraints.ft_cap_min = ft_prod     >= ft_cap * 0.5;   % 50% minimum load
+prob.Constraints.wel_cap_min = wel_prod   >= wel_cap  * getCostParam('Alkaline Water Electrolyser', 'Minimum load');
+prob.Constraints.nh3_cap_min = nh3_prod   >= nh3_cap  * getCostParam('Ammonia Synthesis', 'Minimum load');
+prob.Constraints.meoh_cap_min = meoh_prod >= meoh_cap * getCostParam('Methanol Synthesis', 'Minimum load');
+prob.Constraints.ft_cap_min = ft_prod     >= ft_cap   * getCostParam('Fischer-Tropsch', 'Minimum load');
+prob.Constraints.ch4_cap_min = ch4_prod   >= ch4_cap  * getCostParam('Methanation', 'Minimum load');
 
-%% Ramping Constraints for Chemical Processes
+% Ramping constraints
+prob.Constraints.nh3_ramp_up   = nh3_prod(2:numHours) - nh3_prod(1:numHours-1) <= nh3_cap * getCostParam('Ammonia Synthesis', 'Ramp up');
+prob.Constraints.nh3_ramp_down = nh3_prod(1:numHours-1) - nh3_prod(2:numHours) <= nh3_cap * getCostParam('Ammonia Synthesis', 'Ramp down');
 
-% Ramp-up is defined as the positive difference between consecutive generation values
+prob.Constraints.meoh_ramp_up   = meoh_prod(2:numHours) - meoh_prod(1:numHours-1) <= meoh_cap * getCostParam('Methanol Synthesis', 'Ramp up');
+prob.Constraints.meoh_ramp_down = meoh_prod(1:numHours-1) - meoh_prod(2:numHours) <= meoh_cap * getCostParam('Methanol Synthesis', 'Ramp down');
+
+prob.Constraints.ft_ramp_up   = ft_prod(2:numHours) - ft_prod(1:numHours-1) <= ft_cap * getCostParam('Fischer-Tropsch', 'Ramp up');
+prob.Constraints.ft_ramp_down = ft_prod(1:numHours-1) - ft_prod(2:numHours) <= ft_cap * getCostParam('Fischer-Tropsch', 'Ramp down');
+
+prob.Constraints.ch4_ramp_up   = ch4_prod(2:numHours) - ch4_prod(1:numHours-1) <= ch4_cap * getCostParam('Methanation', 'Ramp up');
+prob.Constraints.ch4_ramp_down = ch4_prod(1:numHours-1) - ch4_prod(2:numHours) <= ch4_cap * getCostParam('Methanation', 'Ramp down');
+
+% Ramping cost
 prob.Constraints.nh3_ramp_up_constraint = nh3_ramp_up(2:numHours) >= nh3_prod(2:numHours) - nh3_prod(1:numHours-1);
 prob.Constraints.nh3_ramp_up_nonnegative = nh3_ramp_up >= 0;
 
@@ -298,56 +322,62 @@ prob.Constraints.meoh_ramp_up_nonnegative = meoh_ramp_up >= 0;
 getAnnualisedCAPEX = @(tech) getCostParam(tech, 'CAPEX') * 0.07 / (1 - (1 + 0.07)^-getCostParam(tech, 'Lifetime'));
 
 capex = getAnnualisedCAPEX('PV fixed-tilt') * PVO_cap + ...
-    getAnnualisedCAPEX('PV single-axis tracking') * PVA_cap + ...
-    getAnnualisedCAPEX('Onshore Wind') * wind_cap + ...
-    getAnnualisedCAPEX('Wave') * wave_cap + ...
-    getAnnualisedCAPEX('Multi-fuel Gas Turbine') * gasTurbine_cap + ...
-    getAnnualisedCAPEX('Battery') * battery_cap + ...
-    getAnnualisedCAPEX('Battery Interface') * (battery_cap / battery_EP_ratio) + ...
-    getAnnualisedCAPEX('Heat Pump') * heatPump_cap + ...
-    getAnnualisedCAPEX('Electric Heater') * elecHeat_cap + ...
-    getAnnualisedCAPEX('Thermal Energy Storage') * tes_cap + ...
-    getAnnualisedCAPEX('Alkaline Water Electrolyser (BCS)') * wel_cap +...
-    getAnnualisedCAPEX('H2 Storage - lined rock cavern') * h2_rockCavern_cap +...
-    getAnnualisedCAPEX('H2 Storage - underground pipe') * h2_pipe_cap +...
-    getAnnualisedCAPEX('Direct Air Capture') * dac_cap * numHours +...
-    getAnnualisedCAPEX('CO2 Storage') * co2_storage_cap +...
-    getAnnualisedCAPEX('Ammonia Synthesis') * nh3_cap +...
-    getAnnualisedCAPEX('Ammonia Storage') * nh3_storage_cap +...
-    getAnnualisedCAPEX('Methanation') * ch4_cap +...
-    getAnnualisedCAPEX('CH4 Storage') * ch4_storage_cap +...
-    getAnnualisedCAPEX('Methanol Synthesis') * meoh_cap +...
-    getAnnualisedCAPEX('Methanol Storage') * meoh_storage_cap +...
-    getAnnualisedCAPEX('Fischer-Tropsch') * ft_cap +...
-    getAnnualisedCAPEX('Liquid Fuel Storage') * ft_storage_cap;
+        getAnnualisedCAPEX('PV single-axis tracking') * PVA_cap + ...
+        getAnnualisedCAPEX('Onshore Wind') * wind_cap + ...
+        getAnnualisedCAPEX('Wave') * wave_cap + ...
+        getAnnualisedCAPEX('Multi-fuel Internal Combustion Engine') * ice_cap + ...
+        getAnnualisedCAPEX('Battery') * battery_cap + ...
+        getAnnualisedCAPEX('Battery Interface') * (battery_cap / battery_EP_ratio) + ...
+        getAnnualisedCAPEX('Heat Pump') * heatPump_cap + ...
+        getAnnualisedCAPEX('Electric Heater') * elecHeat_cap + ...
+        getAnnualisedCAPEX('Thermal Energy Storage') * tes_cap + ...
+        getAnnualisedCAPEX('Alkaline Water Electrolyser') * wel_cap +...
+        getAnnualisedCAPEX('H2 Storage - lined rock cavern') * h2_rockCavern_cap +...
+        getAnnualisedCAPEX('H2 Storage - underground pipe') * h2_pipe_cap +...
+        getAnnualisedCAPEX('Direct Air Capture') * dac_cap * numHours +...
+        getAnnualisedCAPEX('CO2 Storage') * co2_storage_cap +...
+        getAnnualisedCAPEX('Ammonia Synthesis') * nh3_cap +...
+        getAnnualisedCAPEX('Ammonia Storage') * nh3_storage_cap +...
+        getAnnualisedCAPEX('Methanation') * ch4_cap +...
+        getAnnualisedCAPEX('CH4 Storage') * ch4_storage_cap +...
+        getAnnualisedCAPEX('Methanol Synthesis') * meoh_cap +...
+        getAnnualisedCAPEX('Methanol Storage') * meoh_storage_cap +...
+        getAnnualisedCAPEX('Fischer-Tropsch') * ft_cap +...
+        getAnnualisedCAPEX('Liquid Fuel Storage') * ft_storage_cap;
 
-opex = getCostParam('PV fixed-tilt', 'OPEX') * PVO_cap + ...
-    getCostParam('PV single-axis tracking', 'OPEX') * PVA_cap + ...
-    getCostParam('Onshore Wind', 'OPEX') * wind_cap + ...
-    getCostParam('Wave', 'OPEX') * wave_cap + ...
-    getCostParam('Multi-fuel Gas Turbine', 'OPEX') * gasTurbine_cap + ...
-    getCostParam('Battery', 'OPEX') * battery_cap + ...
-    getCostParam('Battery Interface', 'OPEX') * (battery_cap / battery_EP_ratio) + ...
-    getCostParam('Heat Pump', 'OPEX') * heatPump_cap + ...
-    getCostParam('Electric Heater', 'OPEX') * elecHeat_cap + ...
-    getCostParam('Thermal Energy Storage', 'OPEX') * tes_cap + ...
-    getCostParam('Alkaline Water Electrolyser (BCS)', 'OPEX') * wel_cap + ...
-    getCostParam('H2 Storage - lined rock cavern', 'OPEX') * h2_rockCavern_cap + ...
-    getCostParam('H2 Storage - underground pipe', 'OPEX') * h2_pipe_cap + ...
-    getCostParam('Direct Air Capture', 'OPEX') * dac_cap * numHours + ...
-    getCostParam('CO2 Storage', 'OPEX') * co2_storage_cap + ...
-    getCostParam('Ammonia Synthesis', 'OPEX') * nh3_cap + ...
-    getCostParam('Ammonia Storage', 'OPEX') * nh3_storage_cap + ...
-    getCostParam('Methanation', 'OPEX') * ch4_cap + ...
-    getCostParam('CH4 Storage', 'OPEX') * ch4_storage_cap + ...
-    getCostParam('Methanol Synthesis', 'OPEX') * meoh_cap + ...
-    getCostParam('Methanol Storage', 'OPEX') * meoh_storage_cap + ...
-    getCostParam('Fischer-Tropsch', 'OPEX') * ft_cap + ...
-    getCostParam('Liquid Fuel Storage', 'OPEX') * ft_storage_cap;
+opex =  getCostParam('PV fixed-tilt', 'OPEX') * PVO_cap + ...
+        getCostParam('PV single-axis tracking', 'OPEX') * PVA_cap + ...
+        getCostParam('Onshore Wind', 'OPEX') * wind_cap + ...
+        getCostParam('Wave', 'OPEX') * wave_cap + ...
+        getCostParam('Multi-fuel Internal Combustion Engine', 'OPEX') * ice_cap + ...
+        getCostParam('Battery', 'OPEX') * battery_cap + ...
+        getCostParam('Battery Interface', 'OPEX') * (battery_cap / battery_EP_ratio) + ...
+        getCostParam('Heat Pump', 'OPEX') * heatPump_cap + ...
+        getCostParam('Electric Heater', 'OPEX') * elecHeat_cap + ...
+        getCostParam('Thermal Energy Storage', 'OPEX') * tes_cap + ...
+        getCostParam('Alkaline Water Electrolyser', 'OPEX') * wel_cap + ...
+        getCostParam('H2 Storage - lined rock cavern', 'OPEX') * h2_rockCavern_cap + ...
+        getCostParam('H2 Storage - underground pipe', 'OPEX') * h2_pipe_cap + ...
+        getCostParam('Direct Air Capture', 'OPEX') * dac_cap * numHours + ...
+        getCostParam('CO2 Storage', 'OPEX') * co2_storage_cap + ...
+        getCostParam('Ammonia Synthesis', 'OPEX') * nh3_cap + ...
+        getCostParam('Ammonia Storage', 'OPEX') * nh3_storage_cap + ...
+        getCostParam('Methanation', 'OPEX') * ch4_cap + ...
+        getCostParam('CH4 Storage', 'OPEX') * ch4_storage_cap + ...
+        getCostParam('Methanol Synthesis', 'OPEX') * meoh_cap + ...
+        getCostParam('Methanol Storage', 'OPEX') * meoh_storage_cap + ...
+        getCostParam('Fischer-Tropsch', 'OPEX') * ft_cap + ...
+        getCostParam('Liquid Fuel Storage', 'OPEX') * ft_storage_cap;
 
-rampingCost = getCostParam('Ammonia Synthesis', 'Ramp up') * sum(nh3_ramp_up) + getCostParam('Methanol Synthesis', 'Ramp up') * sum(meoh_ramp_up);
+opex_var = getCostParam('Multi-fuel Internal Combustion Engine', 'OPEX_var') * sum(ice_prod) + ...
+           getCostParam('Heat Pump', 'OPEX_var') * sum(heatPump_wel_prod + heatPump_ambient_prod) + ...
+           getCostParam('Alkaline Water Electrolyser', 'OPEX_var') * sum(wel_prod)+...
+           getCostParam('Direct Air Capture', 'OPEX_var') * sum(dac_prod)+...
+           0.00001 * sum(battery_discharge); %% penalty to prevent simultaneous charging and discharging
 
-prob.Objective = capex + opex + rampingCost;
+rampingCost = getCostParam('Ammonia Synthesis', 'Ramp up cost') * sum(nh3_ramp_up) + getCostParam('Methanol Synthesis', 'Ramp up cost') * sum(meoh_ramp_up);
+
+prob.Objective = capex + opex + opex_var + rampingCost;
 %% Solve the optimization problem
 opts = optimoptions('linprog', 'Algorithm','interior-point');
 tic
@@ -362,31 +392,31 @@ results = {
     'PV single-axis capacity', '[MW]', sol.PVA_cap;
     'Wind capacity', '[MW]', sol.wind_cap;
     'Wave capacity', '[MW]', sol.wave_cap;
-    'Gas Turbine capacity', '[MW]', sol.gasTurbine_cap;
+    'Internal Combustion Engine capacity', '[MW]', sol.ice_cap;
     'Battery capacity', '[MWh]', sol.battery_cap;
     'Battery Interface', '[MW]', sol.battery_cap/battery_EP_ratio;
     'Heat pump capacity', '[MW]', sol.heatPump_cap;
     'Electric Heater capacity', '[MW]', sol.elecHeat_cap;
     'TES capacity', '[MWh]', sol.tes_cap;
     'Electrolyser', '[MW]', sol.wel_cap;
-    'H2 Storage - lined rock cavern', '[MWh]', sol.h2_rockCavern_cap;
-    'H2 Storage - underground pipe', '[MWh]', sol.h2_pipe_cap;
+    'H2 Storage - lined rock cavern', '[GWh]', sol.h2_rockCavern_cap/1000;
+    'H2 Storage - underground pipe', '[GWh]', sol.h2_pipe_cap/1000;
     'DAC capacity', '[t/h]', sol.dac_cap;
     'CO2 Storage', '[t]', sol.co2_storage_cap;
     'Methanation', '[MW]', sol.ch4_cap;
-    'CH4 Storage', '[MWh]', sol.ch4_storage_cap;
+    'CH4 Storage', '[GWh]', sol.ch4_storage_cap/1000;
     'Ammonia synthesis', '[MW]', sol.nh3_cap;
-    'Ammonia storage', '[MWh]', sol.nh3_storage_cap;
+    'Ammonia storage', '[GWh]', sol.nh3_storage_cap/1000;
     'Methanol synthesis', '[MW]', sol.meoh_cap;
-    'Methanol storage', '[MWh]', sol.meoh_storage_cap;
+    'Methanol storage', '[GWh]', sol.meoh_storage_cap/1000;
     'FT', '[MW]', sol.ft_cap;
-    'Liquid Fuel Storage', '[MWh]', sol.ft_storage_cap;
+    'Liquid Fuel Storage', '[GWh]', sol.ft_storage_cap/1000;
     '','','Output';
     'PV fixed-tilt electricity', '[MWh]', sum(pvo_prof)*sol.PVO_cap;
     'PV single-axis electricity', '[MWh]', sum(pva_prof)*sol.PVA_cap;
     'Onshore Wind electricity', '[MWh]', sum(wind_prof)*sol.wind_cap;
     'Wave electricity', '[MWh]', sum(wave_prof)*sol.wave_cap;
-    'Gas Turbine electricity', '[MWh]', sum(sol.gasTurbine_prod);
+    'Internal Combustion Engine electricity', '[MWh]', sum(sol.ice_prod);
     'Heat Pump heat', '[MWh]', sum(sol.heatPump_wel_prod + sol.heatPump_ambient_prod);
     'Electric Heater heat', '[MWh]', sum(sol.elecHeat_prod);
     'Electrolyser production', '[MWh,H2]', sum(sol.wel_prod);
@@ -405,9 +435,9 @@ results = {
     'MeOH electricity consumption', '[MWh]', sum(sol.meoh_prod) * el_to_meoh;
     'FT electricity consumption', '[MWh]', sum(sol.ft_prod) * el_to_ft;
     '','','Gas in';
-    'Gas Turbine CH4 consumption', '[MWh]', sum(sol.gasTurbine_ch4_cons);
+    'Internal Combustion Engine CH4 consumption', '[MWh]', sum(sol.ice_ch4_cons);
     '','','Hydrogen in';
-    'Gas Turbine H2 consumption', '[MWh]', sum(sol.gasTurbine_h2_cons);
+    'Internal Combustion Engine H2 consumption', '[MWh]', sum(sol.ice_h2_cons);
     'CH4 H2 consumption', '[MWh]', sum(sol.ch4_prod) * h2_to_ch4;
     'NH3 H2 consumption', '[MWh]', sum(sol.nh3_prod) * h2_to_nh3;
     'MeOH H2 consumption', '[MWh]', sum(sol.meoh_prod) * h2_to_meoh;
@@ -422,13 +452,13 @@ results = {
     'PV single-axis', '[€]', 1000 * getAnnualisedCAPEX('PV single-axis tracking') * sol.PVA_cap;
     'Wind power', '[€]', 1000 * getAnnualisedCAPEX('Onshore Wind') * sol.wind_cap;
     'Wave power', '[€]', 1000 * getAnnualisedCAPEX('Wave') * sol.wave_cap;
-    'Gas Turbine', '[€]', 1000 * getAnnualisedCAPEX('Multi-fuel Gas Turbine') * sol.gasTurbine_cap;
+    'Internal Combustion Engine', '[€]', 1000 * getAnnualisedCAPEX('Multi-fuel Internal Combustion Engine') * sol.ice_cap;
     'Battery capacity', '[€]', 1000 * getAnnualisedCAPEX('Battery') * sol.battery_cap;
     'Battery Interface', '[€]', 1000 * getAnnualisedCAPEX('Battery Interface') * sol.battery_cap/battery_EP_ratio;
     'Heat Pump', '[€]', 1000 * getAnnualisedCAPEX('Heat Pump') * sol.heatPump_cap;
     'Electric Heater', '[€]', 1000 * getAnnualisedCAPEX('Electric Heater') * sol.elecHeat_cap;
     'TES', '[€]', 1000 * getAnnualisedCAPEX('Thermal Energy Storage') * sol.tes_cap;
-    'Electrolyser', '[€]', 1000 * getAnnualisedCAPEX('Alkaline Water Electrolyser (BCS)') * sol.wel_cap;
+    'Electrolyser', '[€]', 1000 * getAnnualisedCAPEX('Alkaline Water Electrolyser') * sol.wel_cap;
     'H2 Storage - lined rock cavern', '[€]', 1000 * getAnnualisedCAPEX('H2 Storage - lined rock cavern') * sol.h2_rockCavern_cap;
     'H2 Storage - underground pipe', '[€]', 1000 * getAnnualisedCAPEX('H2 Storage - underground pipe') * sol.h2_pipe_cap;
     'DAC', '[€]', 1000 * getAnnualisedCAPEX('Direct Air Capture') * sol.dac_cap * numHours;
@@ -446,13 +476,13 @@ results = {
     'PV single-axis', '[€]', 1000 * getCostParam('PV single-axis tracking', 'OPEX') * sol.PVA_cap;
     'Wind power', '[€]', 1000 * getCostParam('Onshore Wind', 'OPEX') * sol.wind_cap;
     'Wave power', '[€]', 1000 * getCostParam('Wave', 'OPEX') * sol.wave_cap;
-    'Gas Turbine', '[€]', 1000 * getCostParam('Multi-fuel Gas Turbine', 'OPEX') * sol.gasTurbine_cap;
+    'Internal Combustion Engine', '[€]', 1000 * getCostParam('Multi-fuel Internal Combustion Engine', 'OPEX') * sol.ice_cap;
     'Battery capacity', '[€]', 1000 * getCostParam('Battery', 'OPEX') * sol.battery_cap;
     'Battery Interface', '[€]', 1000 * getCostParam('Battery Interface', 'OPEX') * (sol.battery_cap / battery_EP_ratio);
     'Heat Pump', '[€]', 1000 * getCostParam('Heat Pump', 'OPEX') * sol.heatPump_cap;
     'Electric Heater', '[€]', 1000 * getCostParam('Electric Heater', 'OPEX') * sol.elecHeat_cap;
     'TES', '[€]', 1000 * getCostParam('Thermal Energy Storage', 'OPEX') * sol.tes_cap;
-    'Electrolyser', '[€]', 1000 * getCostParam('Alkaline Water Electrolyser (BCS)', 'OPEX') * sol.wel_cap;
+    'Electrolyser', '[€]', 1000 * getCostParam('Alkaline Water Electrolyser', 'OPEX') * sol.wel_cap;
     'H2 Storage - lined rock cavern', '[€]', 1000 * getCostParam('H2 Storage - lined rock cavern', 'OPEX') * sol.h2_rockCavern_cap;
     'H2 Storage - underground pipe', '[€]', 1000 * getCostParam('H2 Storage - underground pipe', 'OPEX') * sol.h2_pipe_cap;
     'DAC', '[€]', 1000 * getCostParam('Direct Air Capture', 'OPEX') * sol.dac_cap * numHours;
