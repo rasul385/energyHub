@@ -23,3 +23,4 @@ Example usage is shown in setup_energyHub_LUT.m file.
 
 ## Citing energyHub-LUT
 If you use energyHub-LUT for your research, we would appreciate it if you would cite the following paper:
+Satymov, R., Bogdanov, D., Lavidas, G., Pennock, S., Kluge, S., Lehner, B., Breyer, C., 2026. Wave power for e-fuels and e-chemicals production: technical feasibility, economic viability, and regional opportunities. Energy 356, 141252. [https://doi.org/10.1016/j.energy.2026.141252](https://doi.org/10.1016/j.energy.2026.141252)
